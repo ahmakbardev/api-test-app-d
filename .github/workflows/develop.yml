@@ -1,0 +1,60 @@
+name: Deploy Laravel Admin to Hpanel
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            set -e
+
+            PROJECT_DIR=/home/u723134020/domains/ahmakbar.com/api-test-app-d
+            PUBLIC_LINK=/home/u723134020/domains/ahmakbar.com/public_html/api-test-app
+
+            # Clone pertama kali
+            if [ ! -d "$PROJECT_DIR/.git" ]; then
+              mkdir -p "$PROJECT_DIR"
+              git clone https://github.com/ahmakbardev/api-test-app-d.git "$PROJECT_DIR"
+            fi
+
+            cd "$PROJECT_DIR"
+            git fetch origin develop
+            git reset --hard origin/develop
+
+            # PATH tools hPanel (session-only)
+            export PATH="$HOME/bin:$HOME/bin/node/bin:$PATH"
+
+            # Node build (hapus kalau proyek ini gak butuh)
+            node -v || true
+            npm -v || true
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+            npm run prod || true
+
+            # Composer
+            if command -v composer >/dev/null 2>&1; then
+              composer install --no-dev --optimize-autoloader
+            else
+              $HOME/bin/composer install --no-dev --optimize-autoloader
+            fi
+
+            # Laravel
+            php artisan key:generate --force || true
+            php artisan migrate --force || true
+            php artisan storage:link || true
+            php artisan route:clear
+            php artisan config:cache
+            php artisan optimize
+
+            # Symlink: arahkan subdomain ke folder public aplikasi
+            ln -sfn "$PROJECT_DIR/public" "$PUBLIC_LINK"
