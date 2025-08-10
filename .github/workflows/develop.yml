@@ -22,6 +22,20 @@ jobs:
             PROJECT_DIR=/home/u723134020/domains/ahmakbar.com/api-test-app-d
             PUBLIC_LINK=/home/u723134020/domains/ahmakbar.com/public_html/api-test-app
 
+            # ===== Ensure Node.js tersedia =====
+            if ! command -v node >/dev/null 2>&1; then
+              mkdir -p "$HOME/bin"
+              NODE_VER=v18.17.1
+              TMPDIR=$(mktemp -d)
+              curl -fsSL "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-linux-x64.tar.xz" -o "$TMPDIR/node.tar.xz"
+              tar -xJf "$TMPDIR/node.tar.xz" -C "$HOME/bin"
+              rm -rf "$HOME/bin/node" && mv "$HOME/bin/node-${NODE_VER}-linux-x64" "$HOME/bin/node"
+            fi
+            export PATH="$HOME/bin:$HOME/bin/node/bin:$PATH"
+            node -v
+            npm -v
+            # ===================================
+
             # Clone pertama kali
             if [ ! -d "$PROJECT_DIR/.git" ]; then
               mkdir -p "$PROJECT_DIR"
@@ -32,12 +46,7 @@ jobs:
             git fetch origin develop
             git reset --hard origin/develop
 
-            # PATH tools hPanel (session-only)
-            export PATH="$HOME/bin:$HOME/bin/node/bin:$PATH"
-
-            # Node build (hapus kalau proyek ini gak butuh)
-            node -v || true
-            npm -v || true
+            # Build assets (hapus kalau gak perlu)
             npm ci --legacy-peer-deps || npm install --legacy-peer-deps
             npm run prod || true
 
@@ -56,5 +65,5 @@ jobs:
             php artisan config:cache
             php artisan optimize
 
-            # Symlink: arahkan subdomain ke folder public aplikasi
+            # Symlink public ke subdomain
             ln -sfn "$PROJECT_DIR/public" "$PUBLIC_LINK"
