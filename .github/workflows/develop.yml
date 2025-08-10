@@ -3,14 +3,11 @@ name: Deploy Laravel Admin to Hpanel
 on:
   push:
     branches: [develop]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Deploy via SSH
-        # pin versi action biar stabil
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -38,16 +35,16 @@ jobs:
             git fetch origin develop
             git reset --hard origin/develop
 
-            # Build assets (jalan kalau ada package.json)
+            # Build assets (kalau ada)
             if [ -f package.json ]; then
               npm ci --legacy-peer-deps || npm install --legacy-peer-deps
               npm run prod || npm run build || true
             fi
 
-            # Composer (pakai path langsung, bukan alias)
+            # Composer (panggil langsung dari path)
             $HOME/bin/composer install --no-dev --optimize-autoloader
 
-            # Laravel
+            # Laravel housekeeping
             php artisan key:generate --force || true
             php artisan migrate --force || true
             php artisan storage:link || true
@@ -55,5 +52,12 @@ jobs:
             php artisan config:cache
             php artisan optimize
 
-            # Symlink public ke subdomain (idempotent)
-            ln -sfn "$PROJECT_DIR/public" "$PUBLIC_LINK"
+            # ===== Buat symlink: api-test-app -> PROJECT_DIR/public =====
+            # Pastikan parent ada
+            mkdir -p "$(dirname "$PUBLIC_LINK")"
+            # Kalau target sudah ada (folder/file/symlink), hapus dulu supaya tidak jadi "api-test-app/public"
+            if [ -e "$PUBLIC_LINK" ] || [ -L "$PUBLIC_LINK" ]; then
+              rm -rf "$PUBLIC_LINK"
+            fi
+            ln -s "$PROJECT_DIR/public" "$PUBLIC_LINK"
+            # ============================================================
